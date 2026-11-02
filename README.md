@@ -22,7 +22,7 @@ curl localhost:8090/api/ping
 ## 탈퇴 · 위치 동의 철회 처리 (서비스에서 한 함수로)
 탈퇴
 1. 살아 있는 체크인 `ended_at = now()` (2시간 동안 혼잡도에 남지 않게)
-2. `users` 행 삭제 → FK 가 처리: 제보 · 칸 정보 · 사진 · 체크인 · 등록한 장소 · 제안은 연결만 끊김(SET NULL), 즐겨찾기 · 기기 · 숨김 · 알림 설정 · 위치 확인자료 · 공개 통보 기록은 삭제(CASCADE)
+2. `users` 행 삭제 -> FK 가 처리: 제보 · 칸 정보 · 사진 · 체크인 · 등록한 장소 · 제안은 연결만 끊김(SET NULL), 즐겨찾기 · 기기 · 숨김 · 알림 설정 · 위치 확인자료 · 공개 통보 기록은 삭제(CASCADE)
 3. 이용 제한 중이면 `user_sanctions` 에 식별값 해시만 남김
 
 위치정보 이용 동의 철회 (위치정보법 제24조: 개인위치정보 · 확인자료 지체 없이 파기)
@@ -40,7 +40,7 @@ curl localhost:8090/api/ping
 | `disclosure_notices` | 6개월 | 삭제 |
 | `admin_access_logs` | 1년 | 삭제 |
 | `user_sanctions` | `ends_at` + 1년 | 삭제 |
-| `checkins` | 2시간 만료 → 끝나면 하루 안에 | `ended_at` 채움, `user_id = null` |
+| `checkins` | 2시간 만료 -> 끝나면 하루 안에 | `ended_at` 채움, `user_id = null` |
 | `catchball_places.created_by` | 30일 | null |
 | `place_edit_suggestions` (새 장소, `place_id IS NULL`) | 30일 | `user_id = null` |
 | `content_reports` | 처리 후 1년 (약관 처리방침 3) | 삭제 |
