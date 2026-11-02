@@ -1,0 +1,17 @@
+# 로컬 개발용 DB. 비밀번호는 .env 의 DB_PASSWORD (커밋 안 함)
+services:
+  db:
+    image: postgres:17
+    container_name: ballpark-db
+    environment:
+      POSTGRES_DB: ballpark
+      POSTGRES_USER: ballpark
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 를 .env 에 넣어 주세요}
+      TZ: UTC
+    ports:
+      - "5450:5432"
+    volumes:
+      - ballpark-db:/var/lib/postgresql/data
+
+volumes:
+  ballpark-db:
