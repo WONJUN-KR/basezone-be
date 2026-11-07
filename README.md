@@ -14,6 +14,13 @@ set -a; . ./.env; set +a; ./gradlew bootRun
 curl localhost:8090/api/ping
 ```
 
+## 로그인 (구글 · 카카오 · 애플)
+- 앱이 각 SDK 로 받은 토큰을 `POST /api/auth/login` {provider, token} 으로 보냄. 카카오 = 액세스 토큰(앱 ID 확인), 구글 · 애플 = id_token(공개키 서명 · 발급자 · 클라이언트 ID 확인)
+- 가입한 사람이면 우리 토큰, 처음이면 `signup_required` + 가입 토큰(10분) -> `POST /api/auth/signup` {signupToken, nickname, termsAgreed, locationTermsAgreed, marketingOptIn}
+- 접근 토큰 1시간(`Authorization: Bearer`), 갱신 토큰 30일(`/api/auth/refresh` 할 때마다 새것으로, DB 에는 해시만), `/api/auth/logout` 은 갱신 토큰 삭제
+- 환경 변수: `JWT_SECRET`(32바이트 이상) · `KAKAO_APP_ID` · `GOOGLE_CLIENT_IDS` · `APPLE_CLIENT_IDS`. 비어 있는 로그인은 503
+- 로컬 전용 `AUTH_FAKE_SOCIAL=true`: 소셜 토큰 확인 없이 토큰 문자열을 식별값으로 씀. 운영에서 켜지 말 것
+
 ## 데이터 원칙
 - 카카오 데이터 저장 허용(11/7, V2): 배팅장은 카카오 검색 결과(이름 · 주소 · 전화 · 좌표 · 카테고리)를 `batting_places` 에 저장, 캐치볼 장소는 지도 핀 좌표 + 카카오 좌표 -> 주소 결과(주소 · 시도 · 구 · 동)를 저장. 카카오 답변 원문은 없어서 수익화할 때 다시 확인
 - 제보 · 체크인 좌표는 200m 확인 후 버리고 확인 결과와 시각만 저장
@@ -45,3 +52,4 @@ curl localhost:8090/api/ping
 | `place_edit_suggestions` (새 장소, `place_id IS NULL`) | 30일 | `user_id = null` |
 | `content_reports` | 처리 후 1년 (약관 처리방침 3) | 삭제 |
 | 접속 기록 (서버 로그) | 3개월 | 삭제 |
+| `refresh_tokens` | 만료(30일) 뒤 매일 04:30 | 삭제 (`RefreshTokenCleanup`) |

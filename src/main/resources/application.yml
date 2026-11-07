@@ -13,6 +13,18 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+auth:
+  # 32바이트 이상. 로컬은 .env, 운영은 서버 환경 변수
+  jwt-secret: ${JWT_SECRET:}
+  access-ttl: 1h
+  refresh-ttl: 30d
+  signup-ttl: 10m
+  kakao-app-id: ${KAKAO_APP_ID:}
+  google-client-ids: ${GOOGLE_CLIENT_IDS:}
+  apple-client-ids: ${APPLE_CLIENT_IDS:}
+  # 로컬 개발 전용(소셜 토큰 확인 안 함). 운영에서 켜지 말 것
+  fake-social: ${AUTH_FAKE_SOCIAL:false}
+
 server:
   port: ${PORT:8090}
 
