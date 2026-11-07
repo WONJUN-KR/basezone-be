@@ -13,7 +13,9 @@ public class AuthException extends RuntimeException {
         INVALID_NICKNAME(HttpStatus.BAD_REQUEST),
         NICKNAME_TAKEN(HttpStatus.CONFLICT),
         ALREADY_SIGNED_UP(HttpStatus.CONFLICT),
-        PROVIDER_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE);
+        PROVIDER_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE),
+        // 소셜 회사 쪽 장애 · 네트워크 오류 (토큰이 틀린 것과 구분)
+        SOCIAL_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE);
 
         final HttpStatus status;
 

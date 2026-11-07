@@ -43,7 +43,7 @@ public class AuthService {
     public record LoginResult(Tokens tokens, String signupToken) {
     }
 
-    @Transactional
+    // 트랜잭션 없음: 소셜 확인(외부 호출)이 느려도 DB 커넥션을 붙잡지 않게. 갱신 토큰 저장은 save 하나라 따로 묶을 필요 없음
     public LoginResult login(SocialProvider provider, String socialToken) {
         String subject = verifier.verify(provider, socialToken);
         return users.findByAuthProviderAndAuthSubject(provider.code(), subject)
@@ -78,10 +78,12 @@ public class AuthService {
 
     @Transactional
     public Tokens refresh(String refreshToken) {
-        RefreshToken saved = refreshTokens.findByTokenHash(TokenService.hash(refreshToken == null ? "" : refreshToken))
+        String hash = TokenService.hash(refreshToken == null ? "" : refreshToken);
+        RefreshToken saved = refreshTokens.findByTokenHash(hash)
                 .orElseThrow(() -> new AuthException(AuthException.Code.INVALID_REFRESH_TOKEN));
-        refreshTokens.delete(saved);
-        if (!saved.getExpiresAt().isAfter(clock.instant())) {
+        // 조회와 삭제 사이에 같은 토큰으로 동시에 들어오면 둘 다 통과할 수 있어서, 만료 조건까지 넣은 삭제 한 번으로 한 요청만 성공시킴
+        // 만료된 행은 여기서 안 지워짐 -> 보관 기간 배치가 정리
+        if (refreshTokens.deleteActive(hash, clock.instant()) != 1) {
             throw new AuthException(AuthException.Code.INVALID_REFRESH_TOKEN);
         }
         return issue(saved.getUserId());

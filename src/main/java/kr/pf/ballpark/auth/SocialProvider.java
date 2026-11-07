@@ -17,6 +17,7 @@ public enum SocialProvider {
         for (SocialProvider p : values()) {
             if (p.code().equals(code)) return p;
         }
-        throw new AuthException(AuthException.Code.UNKNOWN_PROVIDER);
+        // 여기서 예외를 던지면 Jackson 이 감싸서 AuthException 처리기에 안 닿을 수 있음 -> null 로 넘기고 AuthController.login 이 UNKNOWN_PROVIDER 처리
+        return null;
     }
 }

@@ -1,12 +1,18 @@
 package kr.pf.ballpark.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
+import com.nimbusds.jose.RemoteKeySourceException;
+
 import org.junit.jupiter.api.Test;
+import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
 
@@ -46,6 +52,30 @@ class SocialVerifierTest {
     @Test
     void fakeSocial() {
         AuthProperties p = new AuthProperties(TokenServiceTest.SECRET, null, null, null, null, List.of(), List.of(), true);
-        assertThat(new SocialVerifier(p).verify(SocialProvider.GOOGLE, "abc")).isEqualTo("fake-abc");
+        assertThat(new SocialVerifier(p, new MockEnvironment()).verify(SocialProvider.GOOGLE, "abc")).isEqualTo("fake-abc");
+    }
+
+    // 공개키를 못 받아온 건 장애(503), 토큰이 틀린 건 401
+    @Test
+    void keyFetchFailure() {
+        JwtException fetch = new JwtException("decode", new RemoteKeySourceException("Couldn't retrieve remote JWK set", new IOException("timeout")));
+        assertThat(SocialVerifier.isKeyFetchFailure(fetch)).isTrue();
+        assertThat(SocialVerifier.isKeyFetchFailure(new JwtException("Signed JWT rejected: Invalid signature"))).isFalse();
+    }
+
+    // 모르는 provider 는 null (컨트롤러가 unknown_provider 로 응답)
+    @Test
+    void unknownProvider() {
+        assertThat(SocialProvider.from("naver")).isNull();
+        assertThat(SocialProvider.from("google")).isEqualTo(SocialProvider.GOOGLE);
+    }
+
+    // prod 프로필에서 가짜 로그인이 켜져 있으면 시작 안 함
+    @Test
+    void fakeSocialBlockedInProd() {
+        AuthProperties p = new AuthProperties(TokenServiceTest.SECRET, null, null, null, null, List.of(), List.of(), true);
+        MockEnvironment prod = new MockEnvironment();
+        prod.setActiveProfiles("prod");
+        assertThatThrownBy(() -> new SocialVerifier(p, prod)).isInstanceOf(IllegalStateException.class);
     }
 }

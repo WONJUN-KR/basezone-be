@@ -1,11 +1,20 @@
 package kr.pf.ballpark.auth;
 
+import java.io.IOException;
+import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.nimbusds.jose.RemoteKeySourceException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
@@ -14,10 +23,12 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
+import org.springframework.security.oauth2.jwt.JwtValidationException;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 // 앱이 보낸 소셜 토큰을 각 회사에 확인하고 사용자 식별값(subject)을 돌려줌
 @Component
@@ -29,14 +40,27 @@ public class SocialVerifier {
     private static final String APPLE_JWKS = "https://appleid.apple.com/auth/keys";
     private static final Set<String> APPLE_ISSUERS = Set.of("https://appleid.apple.com");
 
+    private static final Logger log = LoggerFactory.getLogger(SocialVerifier.class);
+
     private final AuthProperties props;
     private final RestClient kakao;
     private volatile JwtDecoder google;
     private volatile JwtDecoder apple;
 
-    public SocialVerifier(AuthProperties props) {
+    public SocialVerifier(AuthProperties props, Environment env) {
         this.props = props;
-        this.kakao = RestClient.create();
+        // 가짜 로그인은 로컬 전용. prod 프로필에서 켜져 있으면 아예 안 뜸
+        if (props.fakeSocial()) {
+            if (env.acceptsProfiles(Profiles.of("prod"))) {
+                throw new IllegalStateException("prod 프로필에서는 AUTH_FAKE_SOCIAL 을 켤 수 없어요");
+            }
+            log.warn("AUTH_FAKE_SOCIAL=true: 소셜 토큰을 확인하지 않아요. 로컬 개발에서만 쓰세요");
+        }
+        // 카카오가 느려도 로그인 요청이 오래 묶이지 않게
+        HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(http);
+        factory.setReadTimeout(Duration.ofSeconds(5));
+        this.kakao = RestClient.builder().requestFactory(factory).build();
     }
 
     public String verify(SocialProvider provider, String token) {
@@ -63,8 +87,13 @@ public class SocialVerifier {
             info = kakao.get().uri(KAKAO_TOKEN_INFO)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                     .retrieve().body(Map.class);
+        } catch (RestClientResponseException e) {
+            // 4xx = 토큰이 틀림, 5xx = 카카오 장애
+            throw new AuthException(e.getStatusCode().is4xxClientError()
+                    ? AuthException.Code.INVALID_SOCIAL_TOKEN : AuthException.Code.SOCIAL_UNAVAILABLE);
         } catch (RestClientException e) {
-            throw new AuthException(AuthException.Code.INVALID_SOCIAL_TOKEN);
+            // 타임아웃 · 연결 실패
+            throw new AuthException(AuthException.Code.SOCIAL_UNAVAILABLE);
         }
         if (info == null || info.get("id") == null || !String.valueOf(props.kakaoAppId()).equals(String.valueOf(info.get("app_id")))) {
             throw new AuthException(AuthException.Code.INVALID_SOCIAL_TOKEN);
@@ -76,9 +105,21 @@ public class SocialVerifier {
     private String idToken(JwtDecoder decoder, String idToken) {
         try {
             return decoder.decode(idToken).getSubject();
-        } catch (JwtException e) {
+        } catch (JwtValidationException e) {
+            // 서명은 맞는데 발급자 · 대상 · 만료가 틀림
             throw new AuthException(AuthException.Code.INVALID_SOCIAL_TOKEN);
+        } catch (JwtException e) {
+            // 공개키를 못 받아옴(구글 · 애플 장애 · 네트워크) vs 토큰 모양 · 서명이 틀림
+            throw new AuthException(isKeyFetchFailure(e) ? AuthException.Code.SOCIAL_UNAVAILABLE : AuthException.Code.INVALID_SOCIAL_TOKEN);
         }
+    }
+
+    // Nimbus 가 공개키 요청에 실패하면 원인에 RemoteKeySourceException(IOException 계열)이 붙음
+    static boolean isKeyFetchFailure(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof RemoteKeySourceException || t instanceof IOException) return true;
+        }
+        return false;
     }
 
     private JwtDecoder googleDecoder() {
