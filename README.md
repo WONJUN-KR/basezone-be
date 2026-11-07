@@ -52,3 +52,4 @@ curl localhost:8090/api/ping
 | `place_edit_suggestions` (새 장소, `place_id IS NULL`) | 30일 | `user_id = null` |
 | `content_reports` | 처리 후 1년 (약관 처리방침 3) | 삭제 |
 | 접속 기록 (서버 로그) | 3개월 | 삭제 |
+| `refresh_tokens` | 만료(30일) 뒤 매일 04:30 | 삭제 (`RefreshTokenCleanup`) |
