@@ -1,6 +1,7 @@
 package kr.pf.ballpark.place;
 
 import java.time.Instant;
+import java.util.List;
 
 public final class PlaceResponses {
 
@@ -18,6 +19,10 @@ public final class PlaceResponses {
             Instant lastReportedAt,
             boolean needsRefresh,
             Crowd crowd) {
+    }
+
+    // 지도 범위 조회 결과. 장소가 최대 개수를 넘으면 잘라서 주고 truncated = true
+    public record CatchballPage(List<CatchballSummary> places, boolean truncated) {
     }
 
     public record Crowd(int level, CrowdCalculator.Source source) {

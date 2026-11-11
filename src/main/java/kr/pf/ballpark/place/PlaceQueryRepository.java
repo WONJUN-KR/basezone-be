@@ -89,6 +89,7 @@ public class PlaceQueryRepository {
 
     // 기기가 카카오에서 찾은 배팅장 ID 로 우리 데이터만 돌려줌 (이름 · 주소 · 좌표는 서버에 없음)
     // 칸마다 최근 90일 'hand' 제보 중 가장 많은 값을 그 칸의 값으로 봄. left · both 면 왼손 타석
+    // 값은 left · right · both 만 셈 (그 밖의 값이 이기면 알려진 칸으로 잘못 세어 왼손 0 이 되므로)
     public List<BattingRow> findBattingByKakaoIds(Collection<String> kakaoPlaceIds) {
         if (kakaoPlaceIds.isEmpty()) return List.of();
         return jdbc.sql("""
@@ -99,6 +100,7 @@ public class PlaceQueryRepository {
                     JOIN places p ON p.id = b.place_id
                     WHERE p.kakao_place_id IN (:ids)
                       AND f.field = 'hand'
+                      AND f.value ->> 'hand' IN ('left', 'right', 'both')
                       AND f.created_at > now() - interval '90 days'
                     GROUP BY b.place_id, f.box_id, f.value ->> 'hand'
                 ),

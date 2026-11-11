@@ -15,6 +15,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 
 import kr.pf.ballpark.place.PlaceResponses.BattingSummary;
+import kr.pf.ballpark.place.PlaceResponses.CatchballPage;
 import kr.pf.ballpark.place.PlaceResponses.CatchballSummary;
 import kr.pf.ballpark.place.PlaceResponses.Crowd;
 
@@ -30,17 +31,18 @@ class PlaceControllerTest {
     // 지도 범위로 캐치볼 장소 조회 -> 판정 · 혼잡도가 소문자 코드로 나감
     @Test
     void catchball() {
-        given(service.catchballInBounds(any())).willReturn(List.of(new CatchballSummary(
+        given(service.catchballInBounds(any())).willReturn(new CatchballPage(List.of(new CatchballSummary(
                 1L, "잠실한강공원 잔디밭", 37.5185, 127.0868, Verdict.SAFE, 12,
-                Instant.parse("2026-10-30T03:00:00Z"), false, new Crowd(2, CrowdCalculator.Source.REPORT))));
+                Instant.parse("2026-10-30T03:00:00Z"), false, new Crowd(2, CrowdCalculator.Source.REPORT))), false));
 
         assertThat(mvc.get().uri("/api/places/catchball?swLat=37.50&swLng=127.07&neLat=37.53&neLng=127.10"))
                 .hasStatusOk()
                 .bodyJson()
                 .isLenientlyEqualTo("""
-                        [{"id":1,"name":"잠실한강공원 잔디밭","verdict":"safe","judgeCount":12,
+                        {"places":[{"id":1,"name":"잠실한강공원 잔디밭","verdict":"safe","judgeCount":12,
                           "lastReportedAt":"2026-10-30T03:00:00Z","needsRefresh":false,
-                          "crowd":{"level":2,"source":"report"}}]
+                          "crowd":{"level":2,"source":"report"}}],
+                         "truncated":false}
                         """);
     }
 
@@ -48,6 +50,22 @@ class PlaceControllerTest {
     @Test
     void boundsTooWide() {
         assertThat(mvc.get().uri("/api/places/catchball?swLat=37.0&swLng=127.0&neLat=38.0&neLng=128.0"))
+                .hasStatus(400);
+    }
+
+    // 딱 0.2도는 허용 (37.2 - 37.0 이 소수 오차로 0.2 를 살짝 넘어도)
+    @Test
+    void boundsExactlyMaxSpan() {
+        given(service.catchballInBounds(any())).willReturn(new CatchballPage(List.of(), false));
+
+        assertThat(mvc.get().uri("/api/places/catchball?swLat=37.0&swLng=127.0&neLat=37.2&neLng=127.2"))
+                .hasStatusOk();
+    }
+
+    // 좌표가 NaN 이면 400
+    @Test
+    void boundsNaN() {
+        assertThat(mvc.get().uri("/api/places/catchball?swLat=NaN&swLng=127.0&neLat=37.1&neLng=127.1"))
                 .hasStatus(400);
     }
 
@@ -71,6 +89,15 @@ class PlaceControllerTest {
         assertThat(mvc.post().uri("/api/places/batting/lookup")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"kakaoPlaceIds\":[\"abc\"]}"))
+                .hasStatus(400);
+    }
+
+    // 카카오 장소 ID 목록에 null 이 섞이면 400
+    @Test
+    void nullKakaoId() {
+        assertThat(mvc.post().uri("/api/places/batting/lookup")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"kakaoPlaceIds\":[\"12345\",null]}"))
                 .hasStatus(400);
     }
 }

@@ -16,6 +16,7 @@ import kr.pf.ballpark.place.PlaceQueryRepository.CatchballRow;
 import kr.pf.ballpark.place.PlaceQueryRepository.CheckinPeopleRow;
 import kr.pf.ballpark.place.PlaceQueryRepository.ReportRow;
 import kr.pf.ballpark.place.PlaceResponses.BattingSummary;
+import kr.pf.ballpark.place.PlaceResponses.CatchballPage;
 import kr.pf.ballpark.place.PlaceResponses.CatchballSummary;
 import kr.pf.ballpark.place.PlaceResponses.Crowd;
 import lombok.RequiredArgsConstructor;
@@ -31,10 +32,13 @@ public class PlaceQueryService {
     private final PlaceQueryRepository repository;
     private final Clock clock;
 
-    public List<CatchballSummary> catchballInBounds(Bounds bounds) {
+    // 최대 200개. 하나 더 읽어 보고 넘치면 truncated = true (앱은 '확대해 주세요' 표시)
+    public CatchballPage catchballInBounds(Bounds bounds) {
         Instant now = clock.instant();
-        List<CatchballRow> places = repository.findCatchballInBounds(
-                bounds.swLat(), bounds.swLng(), bounds.neLat(), bounds.neLng(), MAX_PLACES);
+        List<CatchballRow> rows = repository.findCatchballInBounds(
+                bounds.swLat(), bounds.swLng(), bounds.neLat(), bounds.neLng(), MAX_PLACES + 1);
+        boolean truncated = rows.size() > MAX_PLACES;
+        List<CatchballRow> places = truncated ? rows.subList(0, MAX_PLACES) : rows;
         List<Long> ids = places.stream().map(CatchballRow::placeId).toList();
 
         Map<Long, List<ReportRow>> reports = repository.findVisibleReportsSince(ids, now.minus(VerdictCalculator.WINDOW))
@@ -43,7 +47,7 @@ public class PlaceQueryService {
                 .collect(Collectors.toMap(CheckinPeopleRow::placeId, CheckinPeopleRow::people));
 
         Instant crowdFrom = now.minus(CROWD_REPORT_WINDOW);
-        return places.stream().map(p -> {
+        return new CatchballPage(places.stream().map(p -> {
             List<ReportRow> rs = reports.getOrDefault(p.placeId(), List.of());
             VerdictCalculator.Result verdict = VerdictCalculator.calculate(rs.stream()
                     .map(r -> new VerdictCalculator.Vote(r.reportId(), r.userId(),
@@ -57,7 +61,7 @@ public class PlaceQueryService {
                     p.placeId(), p.name(), p.lat().doubleValue(), p.lng().doubleValue(),
                     verdict.verdict(), verdict.judgeCount(), verdict.lastReportedAt(), verdict.needsRefresh(),
                     crowd == null ? null : new Crowd(crowd.level(), crowd.source()));
-        }).toList();
+        }).toList(), truncated);
     }
 
     // 우리 DB 에 없는 배팅장 ID 는 결과에서 빠짐 (앱은 카카오 정보만으로 표시)

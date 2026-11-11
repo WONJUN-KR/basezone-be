@@ -15,10 +15,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import kr.pf.ballpark.place.PlaceResponses.BattingSummary;
-import kr.pf.ballpark.place.PlaceResponses.CatchballSummary;
+import kr.pf.ballpark.place.PlaceResponses.CatchballPage;
 import lombok.RequiredArgsConstructor;
 
 // 홈 지도 조회 API. 로그인 없이 볼 수 있음
@@ -31,7 +32,7 @@ public class PlaceController {
     private final PlaceQueryService service;
 
     @GetMapping("/catchball")
-    public List<CatchballSummary> catchball(
+    public CatchballPage catchball(
             @RequestParam double swLat, @RequestParam double swLng,
             @RequestParam double neLat, @RequestParam double neLng) {
         return service.catchballInBounds(new Bounds(swLat, swLng, neLat, neLng));
@@ -45,7 +46,8 @@ public class PlaceController {
     }
 
     public record BattingLookupRequest(
-            @NotEmpty @Size(max = 50) List<@Pattern(regexp = "\\d{1,20}") String> kakaoPlaceIds) {
+            // @Pattern 은 null 을 통과시키므로 @NotNull 도 (["12345", null] 막기)
+            @NotEmpty @Size(max = 50) List<@NotNull @Pattern(regexp = "\\d{1,20}") String> kakaoPlaceIds) {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
