@@ -96,14 +96,17 @@ public class PlaceQueryRepository {
 
     // 기기가 카카오에서 찾은 배팅장 ID 로 우리 데이터(왼손 타석)만 돌려줌. 이름 · 주소 · 좌표는 V2 부터
     // batting_places 에 저장하지만, 홈 지도는 아직 기기의 카카오 검색 결과를 기준으로 그림
-    // 칸마다 최근 90일 'hand' 제보 중 확인한 사람이 가장 많은 값을 그 칸의 값으로 봄 (한 사람이 여러 번 올려도 1표). left · both 면 왼손 타석
+    // 칸마다 최근 90일 'hand' 제보 중 확인한 사람이 가장 많은 값을 그 칸의 값으로 봄. left · both 면 왼손 타석
+    // 한 사람은 칸마다 최신 제보 1표 (left 로 냈다가 right 로 바꾸면 right 만 셈. 사용자가 없는 제보는 제보마다 1표)
+    // 최신 제보를 먼저 고르고 나서 기간 · 값을 거름 -> 최신 제보가 이상한 값이면 그 사람은 표가 없음(예전 표가 되살아나지 않음)
     // 값은 left · right · both 만 셈 (그 밖의 값이 이기면 알려진 칸으로 잘못 세어 왼손 0 이 되므로)
+    // 동률(표 수 · 마지막 시각이 같음)이면 hand 이름 순으로 고정 - 요청마다 결과가 바뀌지 않게
     public List<BattingRow> findBattingByKakaoIds(Collection<String> kakaoPlaceIds, Instant now) {
         if (kakaoPlaceIds.isEmpty()) return List.of();
         return jdbc.sql("""
-                WITH votes AS (
-                    SELECT b.place_id, f.box_id, h.hand,
-                           COUNT(DISTINCT COALESCE(f.user_id::text, 'fact:' || f.id)) AS cnt, MAX(f.created_at) AS last_at
+                WITH latest AS (
+                    SELECT DISTINCT ON (f.box_id, COALESCE(f.user_id::text, 'fact:' || f.id))
+                           b.place_id, f.box_id, h.hand, f.created_at
                     FROM box_facts f
                     JOIN batting_boxes b ON b.id = f.box_id
                     JOIN places p ON p.id = b.place_id
@@ -111,14 +114,19 @@ public class PlaceQueryRepository {
                     CROSS JOIN LATERAL (SELECT COALESCE(f.value ->> 'hand', f.value #>> '{}') AS hand) h
                     WHERE p.kakao_place_id IN (:ids)
                       AND f.field = 'hand'
-                      AND h.hand IN ('left', 'right', 'both')
-                      AND f.created_at > CAST(:now AS timestamptz) - interval '90 days'
-                    GROUP BY b.place_id, f.box_id, h.hand
+                    ORDER BY f.box_id, COALESCE(f.user_id::text, 'fact:' || f.id), f.created_at DESC, f.id DESC
+                ),
+                votes AS (
+                    SELECT place_id, box_id, hand, COUNT(*) AS cnt, MAX(created_at) AS last_at
+                    FROM latest
+                    WHERE hand IN ('left', 'right', 'both')
+                      AND created_at > CAST(:now AS timestamptz) - interval '90 days'
+                    GROUP BY place_id, box_id, hand
                 ),
                 top AS (
                     SELECT DISTINCT ON (box_id) place_id, box_id, hand
                     FROM votes
-                    ORDER BY box_id, cnt DESC, last_at DESC
+                    ORDER BY box_id, cnt DESC, last_at DESC, hand
                 )
                 SELECT p.id AS place_id, p.kakao_place_id,
                        COUNT(t.box_id)::int AS known_boxes,
