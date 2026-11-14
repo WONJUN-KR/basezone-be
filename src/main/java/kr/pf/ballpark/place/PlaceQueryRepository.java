@@ -31,18 +31,22 @@ public class PlaceQueryRepository {
     public record BattingRow(long placeId, String kakaoPlaceId, int knownBoxes, int leftyBoxes) {
     }
 
-    public List<CatchballRow> findCatchballInBounds(double swLat, double swLng, double neLat, double neLng, int limit) {
+    // afterId 보다 큰 place_id 만 (이어서 조회용 커서, 처음은 0)
+    public List<CatchballRow> findCatchballInBounds(double swLat, double swLng, double neLat, double neLng, long afterId,
+            int limit) {
         return jdbc.sql("""
                 SELECT place_id, name, lat, lng
                 FROM catchball_places
                 WHERE status = 'active'
                   AND lat BETWEEN :swLat AND :neLat
                   AND lng BETWEEN :swLng AND :neLng
+                  AND place_id > :afterId
                 ORDER BY place_id
                 LIMIT :limit
                 """)
                 .param("swLat", swLat).param("neLat", neLat)
                 .param("swLng", swLng).param("neLng", neLng)
+                .param("afterId", afterId)
                 .param("limit", limit)
                 .query(CatchballRow.class)
                 .list();

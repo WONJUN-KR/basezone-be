@@ -21,8 +21,9 @@ public final class PlaceResponses {
             Crowd crowd) {
     }
 
-    // 지도 범위 조회 결과. 장소가 최대 개수를 넘으면 잘라서 주고 truncated = true
-    public record CatchballPage(List<CatchballSummary> places, boolean truncated) {
+    // 지도 범위 조회 결과. 장소가 최대 개수를 넘으면 잘라서 주고 truncated = true,
+    // nextAfterId 를 afterId 로 다시 보내면 나머지 (더 없으면 null)
+    public record CatchballPage(List<CatchballSummary> places, boolean truncated, Long nextAfterId) {
     }
 
     public record Crowd(int level, CrowdCalculator.Source source) {

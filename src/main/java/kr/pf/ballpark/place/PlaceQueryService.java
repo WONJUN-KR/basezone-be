@@ -32,11 +32,12 @@ public class PlaceQueryService {
     private final PlaceQueryRepository repository;
     private final Clock clock;
 
-    // 최대 200개. 하나 더 읽어 보고 넘치면 truncated = true (앱은 '확대해 주세요' 표시)
-    public CatchballPage catchballInBounds(Bounds bounds) {
+    // 한 번에 최대 200개 (place_id 순). 하나 더 읽어 보고 넘치면 truncated = true 와
+    // 다음 조회 커서 nextAfterId(이번 마지막 place_id)를 줌. 앱은 같은 범위 + afterId 로 나머지를 이어서 조회
+    public CatchballPage catchballInBounds(Bounds bounds, long afterId) {
         Instant now = clock.instant();
         List<CatchballRow> rows = repository.findCatchballInBounds(
-                bounds.swLat(), bounds.swLng(), bounds.neLat(), bounds.neLng(), MAX_PLACES + 1);
+                bounds.swLat(), bounds.swLng(), bounds.neLat(), bounds.neLng(), afterId, MAX_PLACES + 1);
         boolean truncated = rows.size() > MAX_PLACES;
         List<CatchballRow> places = truncated ? rows.subList(0, MAX_PLACES) : rows;
         List<Long> ids = places.stream().map(CatchballRow::placeId).toList();
@@ -61,7 +62,7 @@ public class PlaceQueryService {
                     p.placeId(), p.name(), p.lat().doubleValue(), p.lng().doubleValue(),
                     verdict.verdict(), verdict.judgeCount(), verdict.lastReportedAt(), verdict.needsRefresh(),
                     crowd == null ? null : new Crowd(crowd.level(), crowd.source()));
-        }).toList(), truncated);
+        }).toList(), truncated, truncated ? places.getLast().placeId() : null);
     }
 
     // 우리 DB 에 없는 배팅장 ID 는 결과에서 빠짐 (앱은 카카오 정보만으로 표시)
