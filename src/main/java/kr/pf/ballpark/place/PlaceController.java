@@ -53,8 +53,8 @@ public class PlaceController {
             @NotEmpty @Size(max = 50) List<@NotNull @Pattern(regexp = "\\d{1,20}") String> kakaoPlaceIds) {
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, String>> badRequest(IllegalArgumentException e) {
+    @ExceptionHandler(InvalidBoundsException.class)
+    public ResponseEntity<Map<String, String>> badRequest(InvalidBoundsException e) {
         return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
     }
 

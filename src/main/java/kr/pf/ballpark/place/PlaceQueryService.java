@@ -44,7 +44,7 @@ public class PlaceQueryService {
 
         Map<Long, List<ReportRow>> reports = repository.findVisibleReportsSince(ids, now.minus(VerdictCalculator.WINDOW))
                 .stream().collect(Collectors.groupingBy(ReportRow::placeId));
-        Map<Long, Integer> people = repository.sumActiveCheckinPeople(ids).stream()
+        Map<Long, Integer> people = repository.sumActiveCheckinPeople(ids, now).stream()
                 .collect(Collectors.toMap(CheckinPeopleRow::placeId, CheckinPeopleRow::people));
 
         Instant crowdFrom = now.minus(CROWD_REPORT_WINDOW);
@@ -59,7 +59,7 @@ public class PlaceQueryService {
                     people.getOrDefault(p.placeId(), 0),
                     rs.stream().filter(r -> r.createdAt().isAfter(crowdFrom)).map(ReportRow::crowd).toList());
             return new CatchballSummary(
-                    p.placeId(), p.name(), p.lat().doubleValue(), p.lng().doubleValue(),
+                    p.placeId(), p.name(), p.lat().doubleValue(), p.lng().doubleValue(), p.verified(),
                     verdict.verdict(), verdict.judgeCount(), verdict.lastReportedAt(), verdict.needsRefresh(),
                     crowd == null ? null : new Crowd(crowd.level(), crowd.source()));
         }).toList(), truncated, truncated ? places.getLast().placeId() : null);
@@ -67,7 +67,7 @@ public class PlaceQueryService {
 
     // 우리 DB 에 없는 배팅장 ID 는 결과에서 빠짐 (앱은 카카오 정보만으로 표시)
     public List<BattingSummary> battingByKakaoIds(List<String> kakaoPlaceIds) {
-        Map<String, BattingRow> rows = repository.findBattingByKakaoIds(kakaoPlaceIds).stream()
+        Map<String, BattingRow> rows = repository.findBattingByKakaoIds(kakaoPlaceIds, clock.instant()).stream()
                 .collect(Collectors.toMap(BattingRow::kakaoPlaceId, Function.identity()));
         return kakaoPlaceIds.stream().distinct()
                 .filter(rows::containsKey)

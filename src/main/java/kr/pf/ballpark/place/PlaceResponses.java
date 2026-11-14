@@ -14,6 +14,7 @@ public final class PlaceResponses {
             String name,
             double lat,
             double lng,
+            boolean verified, // false = 핀으로만 등록돼 현장 확인 전 ('새 장소')
             Verdict verdict,
             int judgeCount,
             Instant lastReportedAt,

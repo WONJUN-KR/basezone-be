@@ -33,14 +33,14 @@ class PlaceControllerTest {
     @Test
     void catchball() {
         given(service.catchballInBounds(any(), eq(0L))).willReturn(new CatchballPage(List.of(new CatchballSummary(
-                1L, "잠실한강공원 잔디밭", 37.5185, 127.0868, Verdict.SAFE, 12,
+                1L, "잠실한강공원 잔디밭", 37.5185, 127.0868, true, Verdict.SAFE, 12,
                 Instant.parse("2026-10-30T03:00:00Z"), false, new Crowd(2, CrowdCalculator.Source.REPORT))), false, null));
 
         assertThat(mvc.get().uri("/api/places/catchball?swLat=37.50&swLng=127.07&neLat=37.53&neLng=127.10"))
                 .hasStatusOk()
                 .bodyJson()
                 .isLenientlyEqualTo("""
-                        {"places":[{"id":1,"name":"잠실한강공원 잔디밭","verdict":"safe","judgeCount":12,
+                        {"places":[{"id":1,"name":"잠실한강공원 잔디밭","verified":true,"verdict":"safe","judgeCount":12,
                           "lastReportedAt":"2026-10-30T03:00:00Z","needsRefresh":false,
                           "crowd":{"level":2,"source":"report"}}],
                          "truncated":false,"nextAfterId":null}
